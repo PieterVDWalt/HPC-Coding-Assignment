@@ -1,19 +1,197 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <float.h>
+#include <math.h>
 #include <string.h>
 #include "dcdplugin.c"
 
+typedef struct point point;
+
+struct point {
+    char *set;
+    float x;
+    float y;
+    float z;
+};
+
+struct pair {
+    int a;
+    int b;
+    float distance;
+};
+
+int glob_k;
+
+struct pair * closest_k_pairs;
+int amount_in_k;
+
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
-int calculate_closest_pairs(char *set_A, char *set_B, float *x_coords, float *y_coords, float *z_coords, int k) {
+int comparison(const void * elem1, const void * elem2)
+{
+    struct point f = *((struct point *)elem1);
+    struct point s = *((struct point *)elem2);
+    if (f.x > s.x) return  1;
+    if (f.x < s.x) return -1;
     return 0;
 }
 
-int read_dcd_file(char *trajectory_file, char *set_A, char *set_B, int k) {
+void calculate_closest_pairs(struct point *set, int total_size) {
+    qsort (set, total_size, sizeof(*set), comparison);
+    // /printf("SORTED STRUCT:\n");
+    int p;
+    /*for (p = 0; p < total_size; p++) {
+        printf("pos: %d, set: %s, x: %.6f, y: %.6f, z: %.6f\n", p, set[p].set, set[p].x, set[p].y, set[p].z);
+    }*/
+    int x;
+    if (pow(total_size,2) <= glob_k * 4) {
+        for (x = 0; x < total_size-1; x++) {
+            int y;
+            for (y = 1; y < total_size; y++) {
+                if ( (strcmp(set[x].set,"a") == 0 && strcmp(set[y].set,"b") == 0) || (strcmp(set[x].set,"b") == 0 && strcmp(set[y].set,"a") == 0) ) {
+                    float dist = sqrt( pow(set[x].x + set[y].x , 2) + pow(set[x].y + set[y].y , 2) + pow(set[x].z + set[y].z , 2) );
+                    if (amount_in_k < glob_k) {
+                        int new_pos = 0;
+                        int z;
+                        for (z = 0; z < amount_in_k; z++) {
+                            if (closest_k_pairs[z].distance < dist) {
+                                new_pos++;
+                            } else {
+                                break;
+                            }
+                        }
+                        struct pair temp;
+                        temp.a = x;
+                        temp.b = y;
+                        temp.distance = dist;
+                        for (z = amount_in_k-1; z >= new_pos; z--) {
+                            closest_k_pairs[z+1] = closest_k_pairs[z];
+                        }
+                        closest_k_pairs[new_pos] = temp;
+                        amount_in_k++;
+                    } else {
+                        //check if smaller than last element.
+                        //if smaller
+                        //insert into correct position, move rest of elements on, lose last element
+                    }
+                }
+            }
+        }
+    } else {
+        int middle = (int)(total_size / 2);
+        struct pair left[middle];
+        struct pair right[total_size - middle];
+    }
+}
+
+int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B, int B_size) {
     molfile_timestep_t timestep;
     dcdhandle *dcd;
     void *file_data;
+    char *end;
     int nr_atoms = 0;
+    int final_a_size = 0;
+    int final_b_size = 0;
+
+    int r;
+
+    for (r = 0; r < A_size; r++) {
+        char *curr;
+        char *orig;
+        curr = malloc(strlen(set_A[r]) + 1);
+        orig = malloc(strlen(set_A[r]) + 1);
+        strcpy(curr, set_A[r]);
+        strcpy(orig, set_A[r]);
+        if (strchr(set_A[r], '-')) {
+            char *to = strchr(set_A[r], '-');
+            char *from = strtok(curr, "-");
+            memmove(to, to+1, strlen(to));
+            int f_from = strtol(from, &end, 10);
+            int f_to = strtol(to, &end, 10);
+            int difference = f_to - f_from + 1;
+            final_a_size = final_a_size + difference;
+            strcpy(set_A[r], orig);
+        } else {
+            final_a_size++;
+        }
+        free(curr);
+        free(orig);
+    }
+
+    for (r = 0; r < B_size; r++) {
+        char *curr;
+        char *orig;
+        curr = malloc(strlen(set_B[r]) + 1);
+        orig = malloc(strlen(set_B[r]) + 1);
+        strcpy(curr, set_B[r]);
+        strcpy(orig, set_B[r]);
+        if (strchr(set_B[r], '-')) {
+            char *to = strchr(set_B[r], '-');
+            char *from = strtok(curr, "-");
+            memmove(to, to+1, strlen(to));
+            int f_from = strtol(from, &end, 10);
+            int f_to = strtol(to, &end, 10);
+            int difference = f_to - f_from + 1;
+            final_b_size = final_b_size + difference;
+            strcpy(set_B[r], orig);
+        } else {
+            final_b_size++;
+        }
+        free(curr);
+        free(orig);
+    }
+
+    int final_A[final_a_size];
+    int final_B[final_b_size];
+    int final_index = 0;
+
+    for (r = 0; r < A_size; r++) {
+        char *curr;
+        curr = malloc(strlen(set_A[r]) + 1);
+        strcpy(curr, set_A[r]);
+        if (strchr(set_A[r], '-')) {
+            char *to = strchr(set_A[r], '-');
+            char *from = strtok(curr, "-");
+            memmove(to, to+1, strlen(to));
+            int f_from = strtol(from, &end, 10);
+            int f_to = strtol(to, &end, 10);
+            int t;
+            for (t = f_from; t <= f_to; t++) {
+                final_A[final_index] = t;
+                final_index++;
+            }
+        } else {
+            int temp = strtol(set_A[r], &end, 10);
+            final_A[final_index] = temp;
+            final_index++;
+        }
+        free(curr);
+    }
+
+    final_index = 0;
+
+    for (r = 0; r < B_size; r++) {
+        char *curr;
+        curr = malloc(strlen(set_B[r]) + 1);
+        strcpy(curr, set_B[r]);
+        if (strchr(set_B[r], '-')) {
+            char *to = strchr(set_B[r], '-');
+            char *from = strtok(curr, "-");
+            memmove(to, to+1, strlen(to));
+            int f_from = strtol(from, &end, 10);
+            int f_to = strtol(to, &end, 10);
+            int t;
+            for (t = f_from; t <= f_to; t++) {
+                final_B[final_index] = t;
+                final_index++;
+            }
+        } else {
+            int temp = strtol(set_B[r], &end, 10);
+            final_B[final_index] = temp;
+            final_index++;
+        }
+        free(curr);
+    }
 
     file_data = open_dcd_read(trajectory_file, "dcd", &nr_atoms);
 
@@ -31,13 +209,31 @@ int read_dcd_file(char *trajectory_file, char *set_A, char *set_B, int k) {
         fprintf(stderr, "error in read_next_timestep on frame %d\n", x);
         return 1;
       }
+
       float *x_coords = dcd->x;
       float *y_coords = dcd->y;
       float *z_coords = dcd->z;
 
-      int calced = calculate_closest_pairs(set_A, set_B, x_coords, y_coords, z_coords, k);
-      return 0;
+      int p;
+
+      struct point set[final_a_size + final_b_size];
+      for (p = 0; p < final_a_size; p++) {
+          set[p].set = "a";
+          set[p].x = dcd->x[final_A[p]];
+          set[p].y = dcd->y[final_A[p]];
+          set[p].z = dcd->z[final_A[p]];
+      }
+      for (p = final_a_size; p < final_a_size + final_b_size; p++) {
+          set[p].set = "b";
+          set[p].x = dcd->x[final_B[p-final_a_size]];
+          set[p].y = dcd->y[final_B[p-final_a_size]];
+          set[p].z = dcd->z[final_B[p-final_a_size]];
+      }
+
+      calculate_closest_pairs(set, final_a_size + final_b_size);
+
     }
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -86,6 +282,7 @@ int main(int argc, char *argv[]) {
             temp_k[len-1] = '\0';
             k = strtol(temp_k, &end, 10);
             printf("k is %d\n",k);
+            glob_k = k;
         }
         if (counter == 4) {
             set_A = malloc(strlen(buf) + 1);
@@ -130,7 +327,6 @@ int main(int argc, char *argv[]) {
 
     char *final_A[final_a_size];
     char *final_B[final_b_size];
-    counter = 0;
 
     while (strchr(original_A, ',')) {
         char *temp = strchr(original_A, ',');
@@ -161,16 +357,12 @@ int main(int argc, char *argv[]) {
     final_B[counter] = malloc(strlen(original_B) + 1);
     strncpy(final_B[counter], original_B, strlen(original_B));
 
-    for (x = 0; x < NELEMS(final_A); x++) {
-        printf("final_A[%d]: %s\n",x,final_A[x]);
-    }
-
-    for (x = 0; x < NELEMS(final_B); x++) {
-        printf("final_B[%d]: %s\n",x,final_B[x]);
-    }
     fclose(text_input);
 
-    //read_dcd_file(trajectory_file, final_A, final_B, k);
+    closest_k_pairs = (struct pair *)malloc(glob_k * sizeof(struct pair));
+    amount_in_k = 0;
+
+    read_dcd_file(trajectory_file, final_A, final_a_size, final_B, final_b_size);
 
     return 0;
 }
