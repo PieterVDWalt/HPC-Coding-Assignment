@@ -27,7 +27,7 @@ int amount_in_k;
 
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
-int comparison(const void * elem1, const void * elem2)
+int comparison_x(const void * elem1, const void * elem2)
 {
     struct point f = *((struct point *)elem1);
     struct point s = *((struct point *)elem2);
@@ -36,8 +36,32 @@ int comparison(const void * elem1, const void * elem2)
     return 0;
 }
 
+int comparison_y(const void * elem1, const void * elem2)
+{
+    struct point f = *((struct point *)elem1);
+    struct point s = *((struct point *)elem2);
+    if (f.y > s.y) return  1;
+    if (f.y < s.y) return -1;
+    return 0;
+}
+
+void check_inner_strip(struct point *inner_strip, int strip_size, float y_distance) {
+    qsort(inner_strip, strip_size, sizeof(*inner_strip), comparison_y);
+
+    int x;
+    for (x = 0; x < strip_size - 1; x++) {
+        if ( (strcmp(inner_strip[x].set,"a") == 0  && strcmp(inner_strip[x+1].set,"b") == 0) || (strcmp(inner_strip[x].set,"b") == 0 && strcmp(inner_strip[x+1].set,"a") == 0) ) {
+            if (abs(inner_strip[x].y - inner_strip[x+1].y) < y_distance) {
+                //todo: need to check if point exists in existing closest-k-pair before adding it
+                //if it exists, check which pair's distance is shorter. adjust closest_k_pairs accordingly
+                //todo: complete check_inner_strip
+            }
+        }
+    }
+}
+
 void calculate_closest_pairs(struct point *set, int total_size) {
-    qsort (set, total_size, sizeof(*set), comparison);
+    qsort (set, total_size, sizeof(*set), comparison_x);
     // /printf("SORTED STRUCT:\n");
     int p;
     /*for (p = 0; p < total_size; p++) {
@@ -70,17 +94,65 @@ void calculate_closest_pairs(struct point *set, int total_size) {
                         closest_k_pairs[new_pos] = temp;
                         amount_in_k++;
                     } else {
-                        //check if smaller than last element.
-                        //if smaller
-                        //insert into correct position, move rest of elements on, lose last element
+                        if (dist < closest_k_pairs[glob_k-1].distance) {
+                            int t;
+                            int new_pos = glob_k-1;
+                            for (t = glob_k-2; t >= 0; t++) {
+                                if (dist < closest_k_pairs[t].distance) {
+                                    new_pos--;
+                                } else {
+                                    break;
+                                }
+                            }
+                            struct pair temp;
+                            temp.a = x;
+                            temp.b = y;
+                            temp.distance = dist;
+                            for (t = glob_k-1; t > new_pos; t--) {
+                                closest_k_pairs[t] = closest_k_pairs[t-1];
+                            }
+                            closest_k_pairs[new_pos] = temp;
+                        }
                     }
                 }
             }
         }
     } else {
-        int middle = (int)(total_size / 2);
-        struct pair left[middle];
-        struct pair right[total_size - middle];
+        int middle;
+        if (total_size % 2 != 0) {
+            middle = (int)((total_size / 2)+1);
+        } else {
+            middle = (int)(total_size / 2);
+        }
+        struct point left[middle];
+        struct point right[total_size - middle];
+        memcpy(left, &set[0], (middle)*sizeof(struct pair));
+        memcpy(right, &set[middle], (total_size - middle)*sizeof(struct pair));
+        calculate_closest_pairs(left, middle);
+        calculate_closest_pairs(right, total_size - middle);
+        int strip_size = 0;
+        int left_checker = middle - 1;
+        int right_checker = 0;
+        float middle_x = (left[middle-1].x + right[0].x) / 2;
+        float lower_limit = middle_x - closest_k_pairs[amount_in_k].distance;
+        float upper_limit = middle_x + closest_k_pairs[amount_in_k].distance;
+        while (left[left_checker].x > lower_limit) {
+            left_checker--;
+            strip_size++;
+        }
+        while (right[right_checker].x < upper_limit) {
+            right_checker++;
+            strip_size++;
+        }
+        struct point inner_strip[strip_size];
+        int q;
+        for (q = left_checker; q < middle - 1; q++) {
+            inner_strip[q - left_checker] = left[q + 1];
+        }
+        for (q = 0; q < right_checker; q++) {
+            inner_strip[middle - left_checker - 1 + q] = right[q];
+        }
+        check_inner_strip(inner_strip, strip_size, closest_k_pairs[amount_in_k].distance);
     }
 }
 
