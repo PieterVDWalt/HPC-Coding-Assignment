@@ -7,7 +7,12 @@
 
 typedef struct point point;
 
+typedef int bool;
+#define true 1
+#define false 0
+
 struct point {
+    int index;
     char *set;
     float x;
     float y;
@@ -21,6 +26,7 @@ struct pair {
 };
 
 int glob_k;
+char *output_file;
 
 struct pair * closest_k_pairs;
 int amount_in_k;
@@ -50,54 +56,84 @@ void check_inner_strip(struct point *inner_strip, int strip_size, float y_distan
 
     int x;
     for (x = 0; x < strip_size - 1; x++) {
-        if ( (strcmp(inner_strip[x].set,"a") == 0  && strcmp(inner_strip[x+1].set,"b") == 0) || (strcmp(inner_strip[x].set,"b") == 0 && strcmp(inner_strip[x+1].set,"a") == 0) ) {
-            if (abs(inner_strip[x].y - inner_strip[x+1].y) < y_distance) {
-                //todo: need to check if point exists in existing closest-k-pair before adding it
-                //if it exists, check which pair's distance is shorter. adjust closest_k_pairs accordingly
-                //todo: complete check_inner_strip
-            }
-        }
-    }
-}
+        int y;
+        for (y = 1; y < strip_size; y++) {
+        if ( (strcmp(inner_strip[x].set,"a") == 0  && strcmp(inner_strip[y].set,"b") == 0) || (strcmp(inner_strip[x].set,"b") == 0 && strcmp(inner_strip[y].set,"a") == 0) ) {
+            if (abs(inner_strip[x].y - inner_strip[y].y) < y_distance) {
+                float dist = sqrt( pow(inner_strip[x].x - inner_strip[y].x , 2) + pow(inner_strip[x].y - inner_strip[y].y , 2) + pow(inner_strip[x].z - inner_strip[y].z , 2) );
+                int new_a;
+                int new_b;
+                if (strcmp(inner_strip[x].set,"a") == 0) {
+                    new_a = inner_strip[x].index;
+                    new_b = inner_strip[y].index;
+                } else {
+                    new_a = inner_strip[y].index;
+                    new_b = inner_strip[x].index;
+                }
+                if (amount_in_k < glob_k) {
 
-void calculate_closest_pairs(struct point *set, int total_size) {
-    qsort (set, total_size, sizeof(*set), comparison_x);
-    // /printf("SORTED STRUCT:\n");
-    int p;
-    /*for (p = 0; p < total_size; p++) {
-        printf("pos: %d, set: %s, x: %.6f, y: %.6f, z: %.6f\n", p, set[p].set, set[p].x, set[p].y, set[p].z);
-    }*/
-    int x;
-    if (pow(total_size,2) <= glob_k * 4) {
-        for (x = 0; x < total_size-1; x++) {
-            int y;
-            for (y = 1; y < total_size; y++) {
-                if ( (strcmp(set[x].set,"a") == 0 && strcmp(set[y].set,"b") == 0) || (strcmp(set[x].set,"b") == 0 && strcmp(set[y].set,"a") == 0) ) {
-                    float dist = sqrt( pow(set[x].x + set[y].x , 2) + pow(set[x].y + set[y].y , 2) + pow(set[x].z + set[y].z , 2) );
-                    if (amount_in_k < glob_k) {
-                        int new_pos = 0;
+                    if (amount_in_k == 0) {
+                        struct pair temp;
+                        temp.a = new_a;
+                        temp.b = new_b;
+                        temp.distance = dist;
+                        closest_k_pairs[0] = temp;
+                        amount_in_k++;
+                        /*int p;
+                        for (p = 0; p < amount_in_k; p++) {
+                            printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                        }
+                        printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
+                    } else {
                         int z;
+                        bool already_used = false;
                         for (z = 0; z < amount_in_k; z++) {
-                            if (closest_k_pairs[z].distance < dist) {
-                                new_pos++;
-                            } else {
+                            if ((closest_k_pairs[z].a == new_a && closest_k_pairs[z].b == new_b) || (closest_k_pairs[z].b == new_a && closest_k_pairs[z].a == new_b)) {
+                                already_used = true;
                                 break;
                             }
                         }
-                        struct pair temp;
-                        temp.a = x;
-                        temp.b = y;
-                        temp.distance = dist;
-                        for (z = amount_in_k-1; z >= new_pos; z--) {
-                            closest_k_pairs[z+1] = closest_k_pairs[z];
+                        if (!already_used) {
+                            int new_pos = 0;
+                            for (z = 0; z < amount_in_k; z++) {
+                                if (closest_k_pairs[z].distance < dist) {
+                                    new_pos++;
+                                } else {
+                                    break;
+                                }
+                            }
+                            struct pair temp;
+                            temp.a = new_a;
+                            temp.b = new_b;
+                            temp.distance = dist;
+                            for (z = amount_in_k-1; z >= new_pos; z--) {
+                                closest_k_pairs[z+1] = closest_k_pairs[z];
+                            }
+                            closest_k_pairs[new_pos] = temp;
+                            amount_in_k++;
+                            /*int p;
+                            for (p = 0; p < amount_in_k; p++) {
+                                printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                            }
+                            printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
                         }
-                        closest_k_pairs[new_pos] = temp;
-                        amount_in_k++;
-                    } else {
-                        if (dist < closest_k_pairs[glob_k-1].distance) {
+                    }
+
+                } else {
+                    if (dist < closest_k_pairs[glob_k-1].distance) {
+                        int z;
+                        bool already_used = false;
+                        for (z = 0; z < amount_in_k; z++) {
+                            if ((closest_k_pairs[z].a == new_a && closest_k_pairs[z].b == new_b) || (closest_k_pairs[z].b == new_a && closest_k_pairs[z].a == new_b)) {
+                                already_used = true;
+                                break;
+                            }
+                        }
+
+                        if (!already_used) {
                             int t;
                             int new_pos = glob_k-1;
-                            for (t = glob_k-2; t >= 0; t++) {
+                            for (t = glob_k-2; t >= 0; t--) {
                                 if (dist < closest_k_pairs[t].distance) {
                                     new_pos--;
                                 } else {
@@ -105,13 +141,139 @@ void calculate_closest_pairs(struct point *set, int total_size) {
                                 }
                             }
                             struct pair temp;
-                            temp.a = x;
-                            temp.b = y;
+                            temp.a = new_a;
+                            temp.b = new_b;
                             temp.distance = dist;
                             for (t = glob_k-1; t > new_pos; t--) {
                                 closest_k_pairs[t] = closest_k_pairs[t-1];
                             }
                             closest_k_pairs[new_pos] = temp;
+                            /*int p;
+                            for (p = 0; p < amount_in_k; p++) {
+                                printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                            }
+                            printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        }
+    }
+}
+
+void calculate_closest_pairs(struct point *set, int total_size) {
+//    printf("InTo closESt pAIRS\n");
+//    printf("Total SiZe: %d\n", total_size);
+    /*int w;
+    for (w = 0; w < total_size; w++) {
+        printf("number: %d, set[%d]: x: %.6f, y: %.6f, z: %.6f\n", w, set[w].index, set[w].x, set[w].y, set[w].z);
+    }*/
+    int p;
+    int x;
+    if (pow(total_size,2) <= glob_k * 4) {
+        for (x = 0; x < total_size-1; x++) {
+            int y;
+            for (y = 1; y < total_size; y++) {
+        //        printf("CHeCking for different sets qqqqqqqqqqqqqqqqqqqqqqqq\n");
+                if ( (strcmp(set[x].set,"a") == 0 && strcmp(set[y].set,"b") == 0) || (strcmp(set[x].set,"b") == 0 && strcmp(set[y].set,"a") == 0) ) {
+                    float dist = sqrt( pow(set[x].x - set[y].x , 2) + pow(set[x].y - set[y].y , 2) + pow(set[x].z - set[y].z , 2) );
+                    int new_a;
+                    int new_b;
+                    if (strcmp(set[x].set,"a") == 0) {
+                        new_a = set[x].index;
+                        new_b = set[y].index;
+                    } else {
+                        new_a = set[y].index;
+                        new_b = set[x].index;
+                    }
+                    if (amount_in_k < glob_k) {
+                        if (amount_in_k == 0) {
+                            struct pair temp;
+                            temp.a = new_a;
+                            temp.b = new_b;
+                            temp.distance = dist;
+                            closest_k_pairs[0] = temp;
+                            amount_in_k++;
+                        /*    int p;
+                            for (p = 0; p < amount_in_k; p++) {
+                                printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                            }
+                            printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
+                        } else {
+                //            printf("InTo leSS thaN K sasdasdadsadasdsadasdsadasdasdasdasdasda\n");
+                            int z;
+                            bool already_used = false;
+                            for (z = 0; z < amount_in_k; z++) {
+                                if ((closest_k_pairs[z].a == new_a && closest_k_pairs[z].b == new_b) || (closest_k_pairs[z].b == new_a && closest_k_pairs[z].a == new_b)) {
+                                    already_used = true;
+                                    break;
+                                }
+                            }
+                            if (!already_used) {
+                                int new_pos = 0;
+                                for (z = 0; z < amount_in_k; z++) {
+                                    if (closest_k_pairs[z].distance < dist) {
+                                        new_pos++;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                struct pair temp;
+                                temp.a = new_a;
+                                temp.b = new_b;
+                                temp.distance = dist;
+                                for (z = amount_in_k-1; z >= new_pos; z--) {
+                                    closest_k_pairs[z+1] = closest_k_pairs[z];
+                                }
+                                closest_k_pairs[new_pos] = temp;
+                                amount_in_k++;
+                                /*int p;
+                                for (p = 0; p < amount_in_k; p++) {
+                                    printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                                }
+                                printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
+                            }
+                        }
+
+                    } else {
+                        if (dist < closest_k_pairs[glob_k-1].distance) {
+                            int z;
+                            bool already_used = false;
+                            for (z = 0; z < amount_in_k; z++) {
+                                if ((closest_k_pairs[z].a == new_a && closest_k_pairs[z].b == new_b) || (closest_k_pairs[z].b == new_a && closest_k_pairs[z].a == new_b)) {
+                                    already_used = true;
+                                    break;
+                                }
+                            }
+
+                            if (!already_used) {
+                                int t;
+                                int new_pos = glob_k-1;
+                                for (t = glob_k-2; t >= 0; t--) {
+                                    if (dist < closest_k_pairs[t].distance) {
+                                        new_pos--;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                struct pair temp;
+                                temp.a = new_a;
+                                temp.b = new_b;
+                                temp.distance = dist;
+
+                                for (t = glob_k-1; t > new_pos; t--) {
+                                    closest_k_pairs[t] = closest_k_pairs[t-1];
+                                }
+                                closest_k_pairs[new_pos] = temp;
+                            /*    int p;
+                                for (p = 0; p < amount_in_k; p++) {
+                                    printf("timestep %d: closest_k_pairs[%d]: a: %d , b: %d, dist: %.6f\n", x, p, closest_k_pairs[p].a, closest_k_pairs[p].b, closest_k_pairs[p].distance);
+                                }
+                                printf("BREAAAAAAAAAAAAAAAAAAK\n");*/
+                            }
                         }
                     }
                 }
@@ -126,21 +288,23 @@ void calculate_closest_pairs(struct point *set, int total_size) {
         }
         struct point left[middle];
         struct point right[total_size - middle];
-        memcpy(left, &set[0], (middle)*sizeof(struct pair));
-        memcpy(right, &set[middle], (total_size - middle)*sizeof(struct pair));
+        memcpy(left, &set[0], (middle)*sizeof(struct point));
+        memcpy(right, &set[middle], (total_size - middle)*sizeof(struct point));
+    //    printf("CheCkinG LeFt NoW\n");
         calculate_closest_pairs(left, middle);
+    //    printf("CheCkinG RiGht NoW\n");
         calculate_closest_pairs(right, total_size - middle);
         int strip_size = 0;
         int left_checker = middle - 1;
         int right_checker = 0;
         float middle_x = (left[middle-1].x + right[0].x) / 2;
-        float lower_limit = middle_x - closest_k_pairs[amount_in_k].distance;
-        float upper_limit = middle_x + closest_k_pairs[amount_in_k].distance;
-        while (left[left_checker].x > lower_limit) {
+        float lower_limit = middle_x - closest_k_pairs[amount_in_k-1].distance;
+        float upper_limit = middle_x + closest_k_pairs[amount_in_k-1].distance;
+        while (left[left_checker].x > lower_limit && left_checker >= 0) {
             left_checker--;
             strip_size++;
         }
-        while (right[right_checker].x < upper_limit) {
+        while (right[right_checker].x < upper_limit && right_checker < (total_size - middle)) {
             right_checker++;
             strip_size++;
         }
@@ -152,7 +316,7 @@ void calculate_closest_pairs(struct point *set, int total_size) {
         for (q = 0; q < right_checker; q++) {
             inner_strip[middle - left_checker - 1 + q] = right[q];
         }
-        check_inner_strip(inner_strip, strip_size, closest_k_pairs[amount_in_k].distance);
+        check_inner_strip(inner_strip, strip_size, closest_k_pairs[amount_in_k-1].distance);
     }
 }
 
@@ -166,7 +330,6 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
     int final_b_size = 0;
 
     int r;
-
     for (r = 0; r < A_size; r++) {
         char *curr;
         char *orig;
@@ -186,10 +349,7 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
         } else {
             final_a_size++;
         }
-        free(curr);
-        free(orig);
     }
-
     for (r = 0; r < B_size; r++) {
         char *curr;
         char *orig;
@@ -209,8 +369,6 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
         } else {
             final_b_size++;
         }
-        free(curr);
-        free(orig);
     }
 
     int final_A[final_a_size];
@@ -237,7 +395,6 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
             final_A[final_index] = temp;
             final_index++;
         }
-        free(curr);
     }
 
     final_index = 0;
@@ -262,7 +419,6 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
             final_B[final_index] = temp;
             final_index++;
         }
-        free(curr);
     }
 
     file_data = open_dcd_read(trajectory_file, "dcd", &nr_atoms);
@@ -281,7 +437,6 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
         fprintf(stderr, "error in read_next_timestep on frame %d\n", x);
         return 1;
       }
-
       float *x_coords = dcd->x;
       float *y_coords = dcd->y;
       float *z_coords = dcd->z;
@@ -290,20 +445,50 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
 
       struct point set[final_a_size + final_b_size];
       for (p = 0; p < final_a_size; p++) {
+          set[p].index = final_A[p];
           set[p].set = "a";
           set[p].x = dcd->x[final_A[p]];
           set[p].y = dcd->y[final_A[p]];
           set[p].z = dcd->z[final_A[p]];
       }
       for (p = final_a_size; p < final_a_size + final_b_size; p++) {
+          set[p].index = final_B[p-final_a_size];
           set[p].set = "b";
           set[p].x = dcd->x[final_B[p-final_a_size]];
           set[p].y = dcd->y[final_B[p-final_a_size]];
           set[p].z = dcd->z[final_B[p-final_a_size]];
       }
-
+      /*if (x == 0) {
+          int w;
+          for (w = 0; w < final_a_size + final_b_size; w++) {
+              printf("number: %d, set[%d]: x: %.6f, y: %.6f, z: %.6f\n", w, set[w].index, set[w].x, set[w].y, set[w].z);
+          }
+      }*/
+      qsort (set, final_a_size + final_b_size, sizeof(*set), comparison_x);
       calculate_closest_pairs(set, final_a_size + final_b_size);
-
+      FILE *fp;
+      fp = fopen(output_file, "a");
+      for (p = 0; p < glob_k; p++) {
+          char temp_timestep[100];
+          sprintf(temp_timestep ,"%d" , x);
+          char temp_a[10];
+          char temp_b[10];
+          sprintf(temp_a ,"%d" , closest_k_pairs[p].a);
+          sprintf(temp_b ,"%d" , closest_k_pairs[p].b);
+          char temp_dist[10];
+          sprintf(temp_dist ,"%.6f" , closest_k_pairs[p].distance);
+          strcat(temp_timestep, ", ");
+          strcat(temp_timestep, temp_a);
+          strcat(temp_timestep, ", ");
+          strcat(temp_timestep, temp_b);
+          strcat(temp_timestep, ", ");
+          strcat(temp_timestep, temp_dist);
+          strcat(temp_timestep, "\n");
+          fprintf(fp, temp_timestep);
+      }
+      fclose(fp);
+      memset(closest_k_pairs, 0, sizeof(closest_k_pairs));
+      amount_in_k = 0;
     }
     return 0;
 }
@@ -311,13 +496,11 @@ int read_dcd_file(char *trajectory_file, char **set_A, int A_size, char **set_B,
 int main(int argc, char *argv[]) {
     int x;
     char *input_file = "";
-    char *output_file = "";
     char buf[1000];
     if (argc < 5) {
         return 1;
     } else {
         for (x = 0; x < argc; x++) {
-            printf("Argument %d is %s\n",x,argv[x]);
             if (strncmp(argv[x],"-i", 2) == 0) {
                 input_file = argv[x+1];
             } else if (strncmp(argv[x],"-o", 2) == 0) {
@@ -399,6 +582,7 @@ int main(int argc, char *argv[]) {
 
     char *final_A[final_a_size];
     char *final_B[final_b_size];
+    counter = 0;
 
     while (strchr(original_A, ',')) {
         char *temp = strchr(original_A, ',');
@@ -408,7 +592,6 @@ int main(int argc, char *argv[]) {
         final_A[counter] = malloc(strlen(substr) + 1);
         strncpy(final_A[counter], substr, strlen(substr));
         memmove(original_A, original_A+index+1, strlen(original_A));
-        free(substr);
         counter++;
     }
     final_A[counter] = malloc(strlen(original_A) + 1);
@@ -423,7 +606,6 @@ int main(int argc, char *argv[]) {
         final_B[counter] = malloc(strlen(substr) + 1);
         strncpy(final_B[counter], substr, strlen(substr));
         memmove(original_B, original_B+index+1, strlen(original_B));
-        free(substr);
         counter++;
     }
     final_B[counter] = malloc(strlen(original_B) + 1);
@@ -433,6 +615,7 @@ int main(int argc, char *argv[]) {
 
     closest_k_pairs = (struct pair *)malloc(glob_k * sizeof(struct pair));
     amount_in_k = 0;
+
 
     read_dcd_file(trajectory_file, final_A, final_a_size, final_B, final_b_size);
 
